@@ -1,4 +1,9 @@
 version: '3.8'
+
+networks:
+  app-network:
+    driver: bridge
+
 services:
   backend:
     build: 
@@ -15,6 +20,8 @@ services:
     ports:
       - "8000:8000"
     restart: unless-stopped
+    networks:
+      - app-network
   
 
   frontend:
