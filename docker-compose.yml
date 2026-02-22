@@ -14,11 +14,7 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
     ports:
       - "8000:8000"
-    depends_on:
-      - mysql
     restart: unless-stopped
-    networks:
-      - app-network
   
 
   frontend:
@@ -36,7 +32,3 @@ services:
       - app-network
     environment:
       - VITE_API_URL=${VITE_API_URL}
-
-networks:
-  app-network:
-    driver: bridge
