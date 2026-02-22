@@ -17,8 +17,8 @@ services:
       - MYSQL_DB=${MYSQL_DB}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY}
       - FRONTEND_URL=${FRONTEND_URL}
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     restart: unless-stopped
     networks:
       - app-network
@@ -30,8 +30,8 @@ services:
       args:
         # This maps the Coolify variable to the Dockerfile ARG
         - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
-    ports:
-      - "80:3000"
+    expose:
+      - "3000"
     depends_on:
       - backend
     restart: unless-stopped
