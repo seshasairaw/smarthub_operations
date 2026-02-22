@@ -5,31 +5,12 @@ networks:
     driver: bridge
 
 services:
-  mysql:
-    image: mysql:8.0
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DATABASE=${MYSQL_DB}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-    expose:
-      - "3306"
-    restart: unless-stopped
-    networks:
-      - app-network
-    volumes:
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-
   backend:
     build: 
       context: ./backend
     environment:
-      - MYSQL_HOST=mysql
-      - MYSQL_PORT=3306
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DB=${MYSQL_DB}
@@ -37,19 +18,14 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
     expose:
       - "8000"
-    depends_on:
-      mysql:
-        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
-  
 
   frontend:
     build:
       context: ./frontend
       args:
-        # This maps the Coolify variable to the Dockerfile ARG
         - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
     expose:
       - "3000"
