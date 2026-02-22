@@ -5,10 +5,26 @@ networks:
     driver: bridge
 
 services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DB}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+    expose:
+      - "3306"
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
   backend:
     build: 
       context: ./backend
-    # Coolify will inject ENV vars here automatically
     environment:
       - MYSQL_HOST=mysql
       - MYSQL_PORT=3306
@@ -19,6 +35,9 @@ services:
       - FRONTEND_URL=${FRONTEND_URL}
     expose:
       - "8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - app-network
