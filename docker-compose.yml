@@ -1,40 +1,37 @@
 version: '3.8'
-
 services:
-  app:
-    build: .
+  backend:
+    build: 
+      context: ./backend
+    # Coolify will inject ENV vars here automatically
+    environment:
+      - MYSQL_HOST=mysql
+      - MYSQL_PORT=3306
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DB=${MYSQL_DB}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
     ports:
       - "8000:8000"
-    environment:
-      - APP_ENV=development
-      - DATABASE_URL=postgresql://postgres:password@db:5432/appdb
-      - REDIS_URL=redis://redis:6379/0
-    volumes:
-      - .:/app
-      - /app/.venv
     depends_on:
-      - db
-      - redis
-    command: python src/main.py
+      - mysql
+    restart: unless-stopped
+    networks:
+      - app-network
 
-  db:
-    image: postgres:15-alpine
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # This maps the Coolify variable to the Dockerfile ARG
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "80:3000"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: appdb
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  postgres_data:
-  redis_data:
+      - VITE_API_URL=${VITE_API_URL}
