@@ -18,8 +18,7 @@ services:
       - mysql
     restart: unless-stopped
     networks:
-    app-network:
-      driver: bridge
+      - app-network
   
 
   frontend:
@@ -37,3 +36,7 @@ services:
       - app-network
     environment:
       - VITE_API_URL=${VITE_API_URL}
+
+networks:
+  app-network:
+    driver: bridge
