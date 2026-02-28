@@ -1,4 +1,4 @@
-FROM node:20-alpine as build
+FROM node:20-alpine AS build
 WORKDIR /app
 
 # Accept build argument for API URL
@@ -14,7 +14,7 @@ COPY . .
 # Build the application with VITE_API_URL available during build
 RUN VITE_API_URL=$VITE_API_URL npm run build
 
-FROM node:20-alpine as runtime
+FROM node:20-alpine AS runtime
 WORKDIR /app
 RUN npm install -g serve
 COPY --from=build /app/dist ./dist

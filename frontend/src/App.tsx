@@ -18,6 +18,7 @@ import OperationsView from "./pages/OperationsView";
 import VendorManagement from "./pages/VendorManagement";
 import Documents from "./pages/Documents";
 import Analytics from "./pages/Analytics";
+import Chatbot from "./components/Chatbot";
 
 const { Sider, Header, Content } = Layout;
 
@@ -62,6 +63,7 @@ function DashboardLayout({ children }: { children: React.ReactNode }) {
           {children}
         </Content>
       </Layout>
+      <Chatbot />
     </Layout>
   );
 }

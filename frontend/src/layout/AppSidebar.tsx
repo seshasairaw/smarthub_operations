@@ -68,7 +68,7 @@ export default function AppSidebar({ role, user }: Props) {
                     fontWeight: 600,
                     letterSpacing: 0.4,
                     fontSize: 16,}}>
-                    Control Tower
+                    Smart Operations Hub
                 </Typography.Text>
             </div>
 

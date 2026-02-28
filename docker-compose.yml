@@ -8,20 +8,34 @@ services:
   backend:
     build: 
       context: ./backend
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
     environment:
-      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_HOST=${MYSQL_HOST:-157.180.28.78}
       - MYSQL_PORT=${MYSQL_PORT:-3306}
-      - MYSQL_USER=${MYSQL_USER}
-      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
-      - MYSQL_DB=${MYSQL_DB}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - FRONTEND_URL=${FRONTEND_URL}
+      - MYSQL_USER=${MYSQL_USER:-tbatch6}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-tbatch6}
+      - MYSQL_DB=${MYSQL_DB:-tbatch6_db}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-RENEW_SMARTHUB_OPERATIONS_BATCH6_REACTUI_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
     expose:
       - "8000"
     restart: unless-stopped
     networks:
       - app-network
 
+  botbrain:
+    build:
+      context: ./chatbot
+    command: uvicorn BotBrain:app --host 0.0.0.0 --port 8001
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+      - MAIN_BACKEND_URL=${MAIN_BACKEND_URL:-http://backend:8000}
+    expose:
+      - "8001"
+    restart: unless-stopped
+    networks:
+      - app-network
   frontend:
     build:
       context: ./frontend
@@ -34,5 +48,3 @@ services:
     restart: unless-stopped
     networks:
       - app-network
-    environment:
-      - VITE_API_URL=${VITE_API_URL}

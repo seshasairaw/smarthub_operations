@@ -8,6 +8,7 @@ import os
 from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, Query, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 import pymysql
 from auth import LoginRequest, LoginResponse, UserResponse, verify_password, create_access_token
@@ -24,8 +25,9 @@ if not all([MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DB]):
     raise RuntimeError("Missing MYSQL_* env vars in .env")
 
 app = FastAPI(title="Logistics Local APIs (MySQL)")
+app.mount("/pod_docs", StaticFiles(directory="static/POD_documents"), name="pod_docs")
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 # CORS middleware is added to allow requests from the frontend (running on localhost:5173).
 app.add_middleware(
@@ -204,15 +206,18 @@ def get_shipments(limit: int = 200):
         (limit,),
     )
 
-# /api/shipments/summary- This endpoint provides a summary of the current shipment statuses, including the number of shipments in transit, exceptions, delayed shipments, and the on-time delivery rate.
+# /api/shipments/summary- This endpoint provides a summary of the current shipment statuses, including per-status counts and on-time delivery rate.
 @app.get("/api/shipments/summary")
 def shipments_summary():
     row = fetch_one(
         """
             SELECT
-            SUM(CASE WHEN current_status IN ('IN_TRANSIT','OUT_FOR_DELIVERY') THEN 1 ELSE 0 END) AS in_transit,
-            SUM(CASE WHEN has_exception = 1 THEN 1 ELSE 0 END) AS exceptions,
+            SUM(CASE WHEN current_status = 'BOOKED' THEN 1 ELSE 0 END) AS booked,
+            SUM(CASE WHEN current_status = 'PICKED_UP' THEN 1 ELSE 0 END) AS picked_up,
+            SUM(CASE WHEN current_status = 'IN_TRANSIT' THEN 1 ELSE 0 END) AS in_transit,
+            SUM(CASE WHEN current_status = 'OUT_FOR_DELIVERY' THEN 1 ELSE 0 END) AS out_for_delivery,
             SUM(CASE WHEN current_status = 'DELAYED' THEN 1 ELSE 0 END) AS delayed_count,
+            SUM(CASE WHEN has_exception = 1 THEN 1 ELSE 0 END) AS exceptions,
             SUM(CASE WHEN actual_delivery_date IS NOT NULL
                 AND expected_delivery_date IS NOT NULL
                 AND actual_delivery_date <= expected_delivery_date
@@ -223,14 +228,21 @@ def shipments_summary():
         (),
     )
 
+    if not row:
+        return {"booked": 0, "picked_up": 0, "in_transit": 0, "out_for_delivery": 0,
+                "delayed_shipments": 0, "exceptions": 0, "on_time_rate": 0.0}
+
     delivered_total = int(row.get("delivered_total") or 0)
     on_time = int(row.get("on_time_deliveries") or 0)
     on_time_rate = round((on_time / delivered_total) * 100, 1) if delivered_total > 0 else 0.0
 
     return {
-        "shipments_in_transit": int(row.get("in_transit") or 0),
-        "exceptions": int(row.get("exceptions") or 0),
+        "booked": int(row.get("booked") or 0),
+        "picked_up": int(row.get("picked_up") or 0),
+        "in_transit": int(row.get("in_transit") or 0),
+        "out_for_delivery": int(row.get("out_for_delivery") or 0),
         "delayed_shipments": int(row.get("delayed_count") or 0),
+        "exceptions": int(row.get("exceptions") or 0),
         "on_time_rate": on_time_rate,
     }
 
@@ -247,6 +259,49 @@ def shipments_trend():
         ORDER BY DATE(booking_date)
         """
     )
+
+# /api/shipments/{shipment_id} - Returns full detail for a single shipment including vendor, consignee, package, and booking info.
+@app.get("/api/shipments/{shipment_id}")
+def get_shipment_detail(shipment_id: int):
+    row = fetch_one(
+        """
+        SELECT
+            s.id AS shipment_id,
+            a.awb_number,
+            s.origin_city,
+            s.destination_city,
+            s.destination_state,
+            s.destination_pincode,
+            s.current_status,
+            s.expected_delivery_date,
+            s.actual_delivery_date,
+            s.booking_date,
+            s.has_exception,
+            s.exception_type,
+            s.exception_notes,
+            s.consignee_name,
+            s.consignee_address,
+            s.product_type,
+            s.description,
+            s.weight_kg,
+            s.number_of_boxes,
+            s.service_type,
+            s.booking_id,
+            h.hub_code AS current_hub_code,
+            h.hub_name AS current_hub_name,
+            v.name AS vendor_name,
+            COALESCE(s.last_status_update, s.updated_ts) AS last_updated_ts
+        FROM shipments s
+        JOIN awb_numbers a ON a.id = s.awb_id
+        LEFT JOIN hubs h ON h.id = s.current_hub_id
+        LEFT JOIN vendors v ON v.id = s.assigned_vendor_id
+        WHERE s.id = %s
+        """,
+        (shipment_id,),
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Shipment {shipment_id} not found")
+    return row
 
 # This endpoint returns the count of exceptions grouped by their type, ordered by the most common exception types first.
 @app.get("/api/exceptions/by-type")
@@ -271,6 +326,8 @@ def hubs_status(limit: int = 50):
         SELECT
             h.hub_code,
             h.hub_name,
+            h.city,
+            h.pincode,
             CASE
                 WHEN h.is_active = 0 THEN 'DOWN'
                 WHEN COUNT(s.id) >= 20 THEN 'CONGESTED'
@@ -279,9 +336,29 @@ def hubs_status(limit: int = 50):
             COALESCE(h.updated_ts, h.created_ts) AS last_updated_ts
         FROM hubs h
         LEFT JOIN shipments s ON s.current_hub_id = h.id
-        GROUP BY h.id, h.hub_code, h.hub_name, h.is_active, h.updated_ts, h.created_ts
+        GROUP BY h.id, h.hub_code, h.hub_name, h.city, h.pincode, h.is_active, h.updated_ts, h.created_ts
         ORDER BY h.hub_code
         LIMIT %s
         """,
         (limit,),
+    )
+
+@app.get("/api/shipments/delayed")
+def get_delayed_shipments():
+    return fetch_all(
+        """
+        SELECT
+            s.id AS shipment_id,
+            a.awb_number,
+            s.origin_city,
+            s.destination_city,
+            s.current_status,
+            s.expected_delivery_date AS eta,
+            COALESCE(s.last_status_update, s.updated_ts) AS last_updated
+        FROM shipments s
+        JOIN awb_numbers a ON a.id = s.awb_id
+        WHERE s.current_status = 'DELAYED'
+        ORDER BY s.expected_delivery_date ASC
+        """,
+        (),
     )
